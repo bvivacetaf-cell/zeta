@@ -372,10 +372,13 @@ try{const r=localStorage.getItem(KEY);if(r){const j=JSON.parse(r);if(isO(j))S=j}
 S.clients=cleanList(S.clients,cleanClient);S.sessions=cleanList(S.sessions,cleanSession);S.groups=cleanList(S.groups,cleanGroup);
 let DB=null,WRITE=true;
 const last={c:{},s:{},g:{}},chain={},synced={c:false,s:false,g:false};
+const pend={c:{},s:{},g:{}},pdel={c:{},s:{},g:{}};
+let errAt=0;
+const bump=(o,id,n)=>{const v=(o[id]||0)+n;if(v<=0)delete o[id];else o[id]=v};
 const setSync=t=>{const e=document.getElementById('sync');if(e)e.textContent=t};
-const wfail=()=>setSync('No se pudo guardar en la nube. Revisa tu conexión o tus permisos.');
-function put(col,id,obj){const k=col+'/'+id;chain[k]=(chain[k]||Promise.resolve()).then(()=>DB.collection(col).doc(id).set(obj)).catch(wfail)}
-function del(col,id){const k=col+'/'+id;chain[k]=(chain[k]||Promise.resolve()).then(()=>DB.collection(col).doc(id).delete()).catch(wfail)}
+const wfail=err=>{errAt=Date.now();try{console.error('Firestore:',err)}catch(e){}setSync('No se pudo guardar en la nube ('+((err&&err.code)||'error')+'). El cambio no quedó guardado.')};
+function put(col,id,obj){const k=col+'/'+id,t=col[0];bump(pend[t],id,1);chain[k]=(chain[k]||Promise.resolve()).then(()=>DB.collection(col).doc(id).set(obj)).catch(wfail).then(()=>bump(pend[t],id,-1))}
+function del(col,id){const k=col+'/'+id,t=col[0];bump(pdel[t],id,1);chain[k]=(chain[k]||Promise.resolve()).then(()=>DB.collection(col).doc(id).delete()).catch(wfail).then(()=>bump(pdel[t],id,-1))}
 function save(){
   if(!DB){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}return}
   if(!WRITE)return;
@@ -766,17 +769,21 @@ const MIG='gym-agenda-migrated';
 const migrated=(()=>{try{return localStorage.getItem(MIG)==='1'}catch(e){return false}})();
 function onSnap(k,snap){
   const cf=k==='c'?cleanClient:k==='g'?cleanGroup:cleanSession;
-  const remote=snap.docs.map(d=>{try{return cf(JSON.parse(JSON.stringify(d.data())))}catch(e){return null}}).filter(Boolean);
+  let remote=snap.docs.map(d=>{try{return cf(JSON.parse(JSON.stringify(d.data())))}catch(e){return null}}).filter(Boolean);
   const first=!synced[k];synced[k]=true;
   const mine=k==='c'?S.clients:k==='g'?S.groups:S.sessions;
+  const lm={};mine.forEach(o=>{lm[o.id]=o});
+  remote=remote.filter(o=>!pdel[k][o.id]).map(o=>pend[k][o.id]&&lm[o.id]?lm[o.id]:o);
+  const have={};remote.forEach(o=>{have[o.id]=1});
+  remote=remote.concat(mine.filter(o=>pend[k][o.id]&&!have[o.id]&&!pdel[k][o.id]));
   last[k]={};remote.forEach(o=>{last[k][o.id]=JSON.stringify(o)});
-  const extra=first&&!migrated?mine.filter(o=>!last[k][o.id]):[];
+  const extra=first&&!migrated?mine.filter(o=>!last[k][o.id]&&!pdel[k][o.id]):[];
   const all=remote.concat(extra);
   if(k==='c'){all.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));S.clients=all}else if(k==='g'){all.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));S.groups=all}else S.sessions=all;
   if(extra.length)save();
   if(synced.c&&synced.s&&synced.g){try{localStorage.setItem(MIG,'1')}catch(e){}}
   const hm=new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
-  setSync(WRITE?'Guardado en la nube. Se actualiza solo en todos los dispositivos (última actualización '+hm+').':'Solo lectura: no tienes permiso para guardar cambios (última actualización '+hm+').');
+  if(Date.now()-errAt>20000)setSync(WRITE?'Guardado en la nube. Se actualiza solo en todos los dispositivos (última actualización '+hm+').':'Solo lectura: no tienes permiso para guardar cambios (última actualización '+hm+').');
   document.body.classList.toggle('ro',!WRITE);
   render();
   if($('#df').open&&!S.clients.some(x=>x.id===fid))$('#df').close();
