@@ -207,7 +207,7 @@ button.ghost[data-del].danger,button.ghost[data-delg].danger,button.ghost[data-d
     <label>Repetir hasta<input type="date" name="until" id="suntil"></label>
     <div class="row">
       <label>Duración<select name="dur"><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select></label>
-      <label>Tipo<select name="type" id="stype"></select></label>
+      <label>Tipología de entrenamiento<select name="type" id="stype"></select></label>
     </div>
     <p class="lbl">Profes <span>(marca uno o varios)</span></p><div class="cl" id="sagl"></div>
     <label>Notas<textarea name="note" rows="2" maxlength="200"></textarea></label>
@@ -397,7 +397,7 @@ const fmt=m=>p2(Math.floor(m/60))+':'+p2(m%60);
 const uid=()=>{try{if(crypto&&crypto.randomUUID)return crypto.randomUUID().replace(/-/g,'').slice(0,20)}catch(e){}return Date.now().toString(36)+Math.random().toString(36).slice(2,10)};
 const DAYS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const STATUS={p:'Pendiente',a:'Asistió',n:'No vino',c:'Cancelada'};
-const TYPES=['Fuerza','Acondicionamiento','Rendimiento deportivo','Evaluación','Recuperación'];
+const TYPES=['Hipertrofia','Rendimiento deportivo/salud','Reintegro deportivo'];
 let sel=iso(new Date()),view='agenda';
 
 function weekDays(){
